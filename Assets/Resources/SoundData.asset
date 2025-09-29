@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: SoundData
   m_EditorClassIdentifier: 
   soundList:
-  - soundName: "B\u1EAFn S\xFAng"
-    clipPath: D:/TiktokEffect/SoundEffect/HIEU UNG/Ban sung.mp3
+  - soundName: "B\u1EAFn s\xFAng"
+    clipPath: D:/UnityProject/TiktokEffect/SoundEffect/HIEU UNG/Ban sung.mp3

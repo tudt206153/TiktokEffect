@@ -15,7 +15,7 @@ public class SoundEffectManager : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        PlaySound("Sound 1");
+        PlaySound(soundData.soundList[0].soundName);
     }
 
     public void PlaySound(string soundName)

@@ -11,13 +11,13 @@ public class SoundDataEditor : Editor
 
         EditorGUILayout.LabelField("Sound Data Configuration", EditorStyles.boldLabel);
         EditorGUILayout.LabelField("Custom Editor is Working!", EditorStyles.helpBox);
-        
+
         // Test button
         if (GUILayout.Button("TEST BUTTON - Click Me!"))
         {
             Debug.Log("Custom editor is working!");
         }
-        
+
         EditorGUILayout.Space();
 
         // Display and edit the soundList
@@ -27,7 +27,7 @@ public class SoundDataEditor : Editor
         // Show array size control
         int arraySize = soundListProperty.arraySize;
         int newSize = EditorGUILayout.IntField("Sound List Size", arraySize);
-        
+
         if (newSize != arraySize)
         {
             soundListProperty.arraySize = newSize;
@@ -43,21 +43,21 @@ public class SoundDataEditor : Editor
             SerializedProperty clipPathProperty = soundElement.FindPropertyRelative("clipPath");
 
             EditorGUILayout.BeginVertical("box");
-            
+
             EditorGUILayout.LabelField($"Sound {i + 1}", EditorStyles.boldLabel);
-            
+
             // Sound name field
             soundNameProperty.stringValue = EditorGUILayout.TextField("Sound Name", soundNameProperty.stringValue);
-            
+
             // Clip path field with browse button
             EditorGUILayout.BeginHorizontal();
             clipPathProperty.stringValue = EditorGUILayout.TextField("Clip Path", clipPathProperty.stringValue);
-            
+
             if (GUILayout.Button("Browse", GUILayout.Width(60)))
             {
-                string selectedPath = EditorUtility.OpenFilePanel("Select Audio File", 
+                string selectedPath = EditorUtility.OpenFilePanel("Select Audio File",
                     Application.dataPath, "mp3,wav,ogg");
-                
+
                 if (!string.IsNullOrEmpty(selectedPath))
                 {
                     // Convert absolute path to relative path from Assets folder
@@ -114,7 +114,7 @@ public class SoundDataEditor : Editor
             SerializedProperty newElement = soundListProperty.GetArrayElementAtIndex(soundListProperty.arraySize - 1);
             SerializedProperty newSoundName = newElement.FindPropertyRelative("soundName");
             SerializedProperty newClipPath = newElement.FindPropertyRelative("clipPath");
-            
+
             newSoundName.stringValue = $"Sound {soundListProperty.arraySize}";
             newClipPath.stringValue = "";
         }

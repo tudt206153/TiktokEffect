@@ -3,35 +3,44 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
 using System.IO;
+using Unity.VisualScripting;
+using UnityEngine.UI;
 
 public class SoundEffectManager : MonoBehaviour
 {
+    public static SoundEffectManager Instance;
+    void Awake()
+    {
+        Instance = this;
+    }
+    [Header("Volume Settings")]
+    public float defaultVolume = 1.0f;
+    public Slider volumeSlider;
+    [Header("Sound Data")]
     public SoundData soundData;
-    public AudioSource audioSource;
-    
+
     // Cache for loaded audio clips to avoid reloading
     private Dictionary<string, AudioClip> audioClipCache = new Dictionary<string, AudioClip>();
-    
+
     // Start is called before the first frame update
     void Start()
     {
-        PlaySound(soundData.soundList[0].soundName);
     }
 
-    public void PlaySound(string soundName)
+    public void PlaySound(string soundName, AudioSource audioSource = null)
     {
         SoundVariable sound = soundData.soundList.Find(s => s.soundName == soundName);
         if (sound != null)
         {
-            StartCoroutine(LoadAndPlayAudio(sound.clipPath));
+            StartCoroutine(LoadAndPlayAudio(sound.clipPath, audioSource));
         }
         else
         {
             Debug.LogWarning($"Sound not found: {soundName}");
         }
     }
-    
-    public void PlaySoundSync(string soundName)
+
+    public void PlaySoundSync(string soundName, AudioSource audioSource = null)
     {
         SoundVariable sound = soundData.soundList.Find(s => s.soundName == soundName);
         if (sound != null)
@@ -39,15 +48,16 @@ public class SoundEffectManager : MonoBehaviour
             // Check if already cached
             if (audioClipCache.ContainsKey(sound.clipPath))
             {
+                audioSource.volume = defaultVolume;
                 audioSource.PlayOneShot(audioClipCache[sound.clipPath]);
                 return;
             }
-            
+
             // For synchronous loading, try to load from StreamingAssets
             string streamingPath = Path.Combine(Application.streamingAssetsPath, sound.clipPath);
             if (File.Exists(streamingPath))
             {
-                StartCoroutine(LoadAndPlayAudio(streamingPath));
+                StartCoroutine(LoadAndPlayAudio(streamingPath, audioSource));
             }
             else
             {
@@ -59,18 +69,19 @@ public class SoundEffectManager : MonoBehaviour
             Debug.LogWarning($"Sound not found: {soundName}");
         }
     }
-    
-    private IEnumerator LoadAndPlayAudio(string filePath)
+
+    private IEnumerator LoadAndPlayAudio(string filePath, AudioSource audioSource = null)
     {
         // Check cache first
         if (audioClipCache.ContainsKey(filePath))
         {
+            audioSource.volume = defaultVolume;
             audioSource.PlayOneShot(audioClipCache[filePath]);
             yield break;
         }
-        
+
         string fullPath = filePath;
-        
+
         // If path doesn't start with file://, http://, or https://, assume it's a local file
         if (!filePath.StartsWith("file://") && !filePath.StartsWith("http://") && !filePath.StartsWith("https://"))
         {
@@ -112,14 +123,14 @@ public class SoundEffectManager : MonoBehaviour
                 }
             }
         }
-        
+
         // Determine audio type based on file extension
         AudioType audioType = GetAudioType(fullPath);
-        
+
         using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(fullPath, audioType))
         {
             yield return www.SendWebRequest();
-            
+
             if (www.result != UnityWebRequest.Result.Success)
             {
                 Debug.LogError($"Failed to load audio clip: {www.error}");
@@ -140,7 +151,7 @@ public class SoundEffectManager : MonoBehaviour
             }
         }
     }
-    
+
     private AudioType GetAudioType(string filePath)
     {
         string extension = Path.GetExtension(filePath).ToLower();
@@ -160,7 +171,7 @@ public class SoundEffectManager : MonoBehaviour
                 return AudioType.WAV;
         }
     }
-    
+
     // Method to preload audio clips for better performance
     public void PreloadAudioClips()
     {
@@ -172,21 +183,21 @@ public class SoundEffectManager : MonoBehaviour
             }
         }
     }
-    
+
     private IEnumerator PreloadAudio(string filePath)
     {
         yield return StartCoroutine(LoadAudioClip(filePath));
     }
-    
+
     private IEnumerator LoadAudioClip(string filePath)
     {
         if (audioClipCache.ContainsKey(filePath))
         {
             yield break;
         }
-        
+
         string fullPath = filePath;
-        
+
         if (!filePath.StartsWith("file://") && !filePath.StartsWith("http://") && !filePath.StartsWith("https://"))
         {
             if (!Path.IsPathRooted(filePath))
@@ -223,13 +234,13 @@ public class SoundEffectManager : MonoBehaviour
                 }
             }
         }
-        
+
         AudioType audioType = GetAudioType(fullPath);
-        
+
         using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(fullPath, audioType))
         {
             yield return www.SendWebRequest();
-            
+
             if (www.result != UnityWebRequest.Result.Success)
             {
                 Debug.LogError($"Failed to load audio clip: {www.error}");
@@ -244,7 +255,7 @@ public class SoundEffectManager : MonoBehaviour
             }
         }
     }
-    
+
     // Clear cache to free memory
     public void ClearAudioCache()
     {
@@ -257,15 +268,19 @@ public class SoundEffectManager : MonoBehaviour
         }
         audioClipCache.Clear();
     }
-    
+
     void OnDestroy()
     {
         ClearAudioCache();
+        Instance = null;
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+        if (volumeSlider != null)
+        {
+            defaultVolume = volumeSlider.value;
+        }
     }
 }

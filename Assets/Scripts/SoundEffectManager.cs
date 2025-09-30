@@ -116,7 +116,12 @@ public class SoundEffectManager : MonoBehaviour
         string path = UnityEditor.EditorUtility.OpenFilePanel("Select Audio Clip", desktopPath, "wav,mp3,ogg");
         if (!string.IsNullOrEmpty(path))
         {
-            string relativePath = path.Substring(Application.dataPath.Length);
+            string relativePath = path.Substring(desktopPath.Length);
+            //check if first character is /
+            if (relativePath.StartsWith("/"))
+            {
+                relativePath = relativePath.Substring(1);
+            }
             clipPathInput.text = relativePath;
         }
 #else
@@ -176,15 +181,26 @@ public class SoundEffectManager : MonoBehaviour
             if (!string.IsNullOrEmpty(selectedPath) && File.Exists(selectedPath))
             {
                 // Convert to relative path if possible
-                string dataPath = Application.dataPath;
+                string dataPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
                 if (selectedPath.StartsWith(dataPath))
                 {
                     string relativePath = selectedPath.Substring(dataPath.Length);
-                    clipPathInput.text = relativePath;
+                    //check if first character is \
+                    if (relativePath.StartsWith("\\"))
+                    {
+                        relativePath = relativePath.Substring(1);
+                    }
+                    relativePath = relativePath.Replace("\\", "/");
+                    clipPathInput.text =  relativePath;
                 }
                 else
                 {
                     // Use absolute path if not under Assets
+                    if (selectedPath.StartsWith("\\"))
+                    {
+                        selectedPath = selectedPath.Substring(1);
+                    }
+                    selectedPath = selectedPath.Replace("\\", "/");
                     clipPathInput.text = selectedPath;
                 }
             }
@@ -306,9 +322,10 @@ public class SoundEffectManager : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+        PreloadAudioClips();
     }
 
-
+    public TextMeshProUGUI aaaa;
 
     // Overloaded method to play sound by AudioStyle and name
     public void PlaySound(string soundName, AudioSource audioSource = null)

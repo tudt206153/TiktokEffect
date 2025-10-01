@@ -67,6 +67,8 @@ public class SoundEffectManager : MonoBehaviour
     private const uint SWP_SHOWWINDOW = 0x0040;
 
     private bool wasAlwaysOnTop = false;
+    public Toggle loopToggle;
+    public bool isLooping;
     public Sprite favoriteIcon;
     public Sprite defaultIcon;
 
@@ -74,6 +76,7 @@ public class SoundEffectManager : MonoBehaviour
     {
         Instance = this;
         wasAlwaysOnTop = alwaysOnTop;
+        loopToggle.isOn = isLooping;
         LoadSoundDataFromJson();
 
     }
@@ -628,7 +631,9 @@ public class SoundEffectManager : MonoBehaviour
             if (audioClipCache.ContainsKey(sound.clipPath))
             {
                 audioSource.volume = defaultVolume;
-                audioSource.PlayOneShot(audioClipCache[sound.clipPath]);
+                audioSource.clip = audioClipCache[sound.clipPath];
+                audioSource.loop = isLooping;
+                audioSource.Play();
                 return;
             }
 
@@ -655,7 +660,9 @@ public class SoundEffectManager : MonoBehaviour
         if (audioClipCache.ContainsKey(filePath))
         {
             audioSource.volume = defaultVolume;
-            audioSource.PlayOneShot(audioClipCache[filePath]);
+            audioSource.clip = audioClipCache[filePath];
+            audioSource.loop = isLooping;
+            audioSource.Play();
             yield break;
         }
 
@@ -745,7 +752,9 @@ public class SoundEffectManager : MonoBehaviour
                 {
                     // Cache the clip
                     audioClipCache[filePath] = clip;
-                    audioSource.PlayOneShot(clip);
+                    audioSource.clip = clip;
+                    audioSource.loop = isLooping;
+                    audioSource.Play();
                 }
                 else
                 {
@@ -981,6 +990,7 @@ public class SoundEffectManager : MonoBehaviour
             defaultVolume = volumeSlider.value;
         }
         alwaysOnTop = alwaysOnTopToggle.isOn;
+        isLooping = loopToggle.isOn;
         if (Input.GetKeyDown(KeyCode.Alpha0))
         {
             StopAllSounds();

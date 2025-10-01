@@ -19,7 +19,7 @@ public class SoundVariable
 public class SoundDataCollection
 {
     public List<SoundDataWrapper> soundDataList = new List<SoundDataWrapper>();
-    
+
     public SoundDataCollection()
     {
         // Initialize with 8 empty sound data wrappers for each AudioStyle
@@ -74,7 +74,7 @@ public class SoundEffectManager : MonoBehaviour
         Instance = this;
         wasAlwaysOnTop = alwaysOnTop;
         LoadSoundDataFromJson();
-        
+
     }
 
     #region JSON_SAVE_LOAD
@@ -82,13 +82,13 @@ public class SoundEffectManager : MonoBehaviour
     {
         string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
         string fullPath = Path.Combine(desktopPath, jsonPath);
-        
+
         // Create directory if it doesn't exist
         if (!Directory.Exists(fullPath))
         {
             Directory.CreateDirectory(fullPath);
         }
-        
+
         return Path.Combine(fullPath, soundDataFileName);
     }
 
@@ -109,7 +109,7 @@ public class SoundEffectManager : MonoBehaviour
     private void LoadSoundDataFromJson()
     {
         string filePath = GetSoundDataFilePath();
-        
+
         if (File.Exists(filePath))
         {
             try
@@ -158,14 +158,14 @@ public class SoundEffectManager : MonoBehaviour
         Debug.Log($"StreamingAssets path: {Application.streamingAssetsPath}");
         Debug.Log($"Data path: {Application.dataPath}");
         Debug.Log($"Persistent data path: {Application.persistentDataPath}");
-        
+
         string streamingPath = Path.Combine(Application.streamingAssetsPath, testPath);
         Debug.Log($"StreamingAssets test: {streamingPath} - Exists: {File.Exists(streamingPath)}");
-        
+
         string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
         string desktopFilePath = Path.Combine(desktopPath, testPath);
         Debug.Log($"Desktop test: {desktopFilePath} - Exists: {File.Exists(desktopFilePath)}");
-        
+
         string executablePath = Path.GetDirectoryName(Application.dataPath);
         string executableFilePath = Path.Combine(executablePath, testPath);
         Debug.Log($"Executable dir test: {executableFilePath} - Exists: {File.Exists(executableFilePath)}");
@@ -388,26 +388,26 @@ public class SoundEffectManager : MonoBehaviour
                     }
                     //if (content.childCount <= 0)
                     //{
-                        for (int j = 0; j < soundDataCollection.soundDataList[index].soundList.Count; j++)
+                    for (int j = 0; j < soundDataCollection.soundDataList[index].soundList.Count; j++)
+                    {
+                        GameObject soundButton = Instantiate(playSoundButton.gameObject, content);
+                        if (i == 7) soundButton.transform.GetChild(2).gameObject.SetActive(true);
+                        soundButton.GetComponent<AudioLoadingExample>().soundName = soundDataCollection.soundDataList[index].soundList[j].soundName;
+                        soundButton.GetComponent<AudioLoadingExample>().clipPath = soundDataCollection.soundDataList[index].soundList[j].clipPath;
+                        if (PlayerPrefs.GetInt("FavoriteSoundName" + soundButton.GetComponent<AudioLoadingExample>().soundName + soundButton.GetComponent<AudioLoadingExample>().clipPath, 0) == 1)
                         {
-                            GameObject soundButton = Instantiate(playSoundButton.gameObject, content);
-                            if (i == 7) soundButton.transform.GetChild(2).gameObject.SetActive(true);
-                            soundButton.GetComponent<AudioLoadingExample>().soundName = soundDataCollection.soundDataList[index].soundList[j].soundName;
-                            soundButton.GetComponent<AudioLoadingExample>().clipPath = soundDataCollection.soundDataList[index].soundList[j].clipPath;
-                            if (PlayerPrefs.GetInt("FavoriteSoundName" + soundButton.GetComponent<AudioLoadingExample>().soundName + soundButton.GetComponent<AudioLoadingExample>().clipPath, 0) == 1)
-                            {
-                                soundButton.GetComponent<AudioLoadingExample>().iconImage.sprite = soundButton.GetComponent<AudioLoadingExample>().favoriteIcon;
-                            }
-                            else
-                            {
-                                soundButton.GetComponent<AudioLoadingExample>().iconImage.sprite = soundButton.GetComponent<AudioLoadingExample>().defaultIcon;
-                            }
-                            soundButton.GetComponentInChildren<TextMeshProUGUI>().text = soundDataCollection.soundDataList[index].soundList[j].soundName;
+                            soundButton.GetComponent<AudioLoadingExample>().iconImage.sprite = soundButton.GetComponent<AudioLoadingExample>().favoriteIcon;
                         }
+                        else
+                        {
+                            soundButton.GetComponent<AudioLoadingExample>().iconImage.sprite = soundButton.GetComponent<AudioLoadingExample>().defaultIcon;
+                        }
+                        soundButton.GetComponentInChildren<TextMeshProUGUI>().text = soundDataCollection.soundDataList[index].soundList[j].soundName;
+                    }
 
-                        if (content.childCount >= 24)
-                            content.offsetMax = new Vector2(0, 205 * (content.childCount / 3));
-                        content.anchoredPosition = Vector2.zero;
+                    if (content.childCount >= 30)
+                        content.offsetMax = new Vector2(0, 205 * (content.childCount / 5));
+                    content.anchoredPosition = Vector2.zero;
                     //}
 
                 }
@@ -651,7 +651,7 @@ public class SoundEffectManager : MonoBehaviour
                 // If relative path, try StreamingAssets first
                 string streamingPath = Path.Combine(Application.streamingAssetsPath, filePath);
                 Debug.Log($"Trying StreamingAssets path: {streamingPath}");
-                
+
                 if (File.Exists(streamingPath))
                 {
                     fullPath = "file://" + streamingPath.Replace("\\", "/");
@@ -663,7 +663,7 @@ public class SoundEffectManager : MonoBehaviour
                     string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
                     string desktopFilePath = Path.Combine(desktopPath, filePath);
                     Debug.Log($"Trying Desktop path: {desktopFilePath}");
-                    
+
                     if (File.Exists(desktopFilePath))
                     {
                         fullPath = "file://" + desktopFilePath.Replace("\\", "/");
@@ -675,7 +675,7 @@ public class SoundEffectManager : MonoBehaviour
                         string executablePath = Path.GetDirectoryName(Application.dataPath);
                         string executableFilePath = Path.Combine(executablePath, filePath);
                         Debug.Log($"Trying executable directory path: {executableFilePath}");
-                        
+
                         if (File.Exists(executableFilePath))
                         {
                             fullPath = "file://" + executableFilePath.Replace("\\", "/");

@@ -8,6 +8,7 @@ using UnityEngine.UI;
 using TMPro;
 using System;
 using System.Runtime.InteropServices;
+using DG.Tweening;
 [System.Serializable]
 public class SoundVariable
 {
@@ -371,6 +372,7 @@ public class SoundEffectManager : MonoBehaviour
     public void SetTab(int index)
     {
         selectedAudioStyle = (AudioStyle)index;
+        Debug.Log("Selected audio style: " + selectedAudioStyle);
         for (int i = 0; i < tabList.Count; i++)
         {
             if (tabList[i] != null)
@@ -385,13 +387,18 @@ public class SoundEffectManager : MonoBehaviour
                     for (int k = 0; k < content.childCount; k++)
                     {
                         Destroy(content.GetChild(k).gameObject);
+                        content.sizeDelta = new Vector2(content.sizeDelta.x, 300);
                     }
                     //if (content.childCount <= 0)
                     //{
                     for (int j = 0; j < soundDataCollection.soundDataList[index].soundList.Count; j++)
                     {
                         GameObject soundButton = Instantiate(playSoundButton.gameObject, content);
-                        if (i == 7) soundButton.transform.GetChild(2).gameObject.SetActive(true);
+                        if (i == 7)
+                        {
+                            soundButton.transform.GetChild(1).gameObject.SetActive(false);
+                            soundButton.transform.GetChild(2).gameObject.SetActive(true);
+                        }
                         soundButton.GetComponent<AudioLoadingExample>().soundName = soundDataCollection.soundDataList[index].soundList[j].soundName;
                         soundButton.GetComponent<AudioLoadingExample>().clipPath = soundDataCollection.soundDataList[index].soundList[j].clipPath;
                         if (PlayerPrefs.GetInt("FavoriteSoundName" + soundButton.GetComponent<AudioLoadingExample>().soundName + soundButton.GetComponent<AudioLoadingExample>().clipPath, 0) == 1)
@@ -404,10 +411,15 @@ public class SoundEffectManager : MonoBehaviour
                         }
                         soundButton.GetComponentInChildren<TextMeshProUGUI>().text = soundDataCollection.soundDataList[index].soundList[j].soundName;
                     }
+                    DOVirtual.DelayedCall(0.1f, () =>
+                    {
+                        Debug.Log("Content count: " + content.childCount);
+                        if (content.childCount >= 30)
+                            content.offsetMax = new Vector2(0, 205 * (content.childCount / 5));
+                        content.anchoredPosition = Vector2.zero;
+                     });
 
-                    if (content.childCount >= 30)
-                        content.offsetMax = new Vector2(0, 205 * (content.childCount / 5));
-                    content.anchoredPosition = Vector2.zero;
+                    
                     //}
 
                 }
@@ -569,6 +581,13 @@ public class SoundEffectManager : MonoBehaviour
         SetTab(7);
     }
 
+    public void StopAllSounds()
+    {
+        foreach (var audioSource in FindObjectsOfType<AudioSource>())
+        {
+            audioSource.Stop();
+        }
+    }
 
     // Overloaded method to play sound by AudioStyle and name
     public void PlaySound(string soundName, AudioSource audioSource = null)
@@ -962,7 +981,10 @@ public class SoundEffectManager : MonoBehaviour
             defaultVolume = volumeSlider.value;
         }
         alwaysOnTop = alwaysOnTopToggle.isOn;
-
+        if (Input.GetKeyDown(KeyCode.Alpha0))
+        {
+            StopAllSounds();
+        }
         // Check and apply always on top behavior
         CheckAndApplyAlwaysOnTop();
     }

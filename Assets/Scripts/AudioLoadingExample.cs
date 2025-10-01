@@ -47,6 +47,7 @@ public class AudioLoadingExample : MonoBehaviour
     }
     void Update()
     {
+        audioSource.volume = SoundEffectManager.Instance.defaultVolume;
         if (Input.GetKeyDown(KeyCode.P))
         {
             SoundEffectManager.Instance.PreloadAudioClips();

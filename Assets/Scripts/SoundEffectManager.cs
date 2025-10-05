@@ -528,6 +528,16 @@ public class SoundEffectManager : MonoBehaviour
     }
     // Cache for loaded audio clips to avoid reloading
     private Dictionary<string, AudioClip> audioClipCache = new Dictionary<string, AudioClip>();
+    
+    // Memory management for cache
+    [Header("Memory Management")]
+    public int maxCacheSize = 20; // Maximum number of clips to cache
+    public float maxCacheSizeMB = 50f; // Maximum cache size in MB
+    private Dictionary<string, float> cacheAccessTimes = new Dictionary<string, float>();
+    private float currentCacheSizeMB = 0f;
+    
+    // Track active coroutines to prevent duplicates
+    private Dictionary<string, Coroutine> activeLoadingCoroutines = new Dictionary<string, Coroutine>();
 
     // Helper method to find sound by name across all AudioStyles
     private SoundVariable FindSoundByName(string soundName)
@@ -606,7 +616,17 @@ public class SoundEffectManager : MonoBehaviour
         if (sound != null)
         {
             Debug.Log($"Attempting to play sound: {soundName} with path: {sound.clipPath}");
-            StartCoroutine(LoadAndPlayAudio(sound.clipPath, audioSource));
+            
+            // Check if already loading this file
+            if (activeLoadingCoroutines.ContainsKey(sound.clipPath))
+            {
+                ClearAudioCache();
+                Debug.Log($"Audio file {sound.clipPath} is already being loaded, skipping duplicate request");
+                return;
+            }
+            
+            Coroutine loadCoroutine = StartCoroutine(LoadAndPlayAudio(sound.clipPath, audioSource));
+            activeLoadingCoroutines[sound.clipPath] = loadCoroutine;
         }
         else
         {
@@ -656,110 +676,145 @@ public class SoundEffectManager : MonoBehaviour
 
     private IEnumerator LoadAndPlayAudio(string filePath, AudioSource audioSource = null)
     {
-        // Check cache first
-        if (audioClipCache.ContainsKey(filePath))
+        try
         {
-            audioSource.volume = defaultVolume;
-            audioSource.clip = audioClipCache[filePath];
-            audioSource.loop = isLooping;
-            audioSource.Play();
-            yield break;
-        }
-
-        string fullPath = filePath;
-
-        // If path doesn't start with file://, http://, or https://, assume it's a local file
-        if (!filePath.StartsWith("file://") && !filePath.StartsWith("http://") && !filePath.StartsWith("https://"))
-        {
-            // Check if it's an absolute path
-            if (!Path.IsPathRooted(filePath))
+            // Check cache first
+            if (audioClipCache.ContainsKey(filePath))
             {
-                // If relative path, try StreamingAssets first
-                string streamingPath = Path.Combine(Application.streamingAssetsPath, filePath);
-                Debug.Log($"Trying StreamingAssets path: {streamingPath}");
-
-                if (File.Exists(streamingPath))
+                // Update access time for LRU
+                cacheAccessTimes[filePath] = Time.time;
+                
+                if (audioSource != null)
                 {
-                    fullPath = "file://" + streamingPath.Replace("\\", "/");
-                    Debug.Log($"Found file in StreamingAssets: {fullPath}");
-                }
-                else
-                {
-                    // Try relative to Desktop (for desktop-based files)
-                    string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
-                    string desktopFilePath = Path.Combine(desktopPath, filePath);
-                    Debug.Log($"Trying Desktop path: {desktopFilePath}");
-
-                    if (File.Exists(desktopFilePath))
-                    {
-                        fullPath = "file://" + desktopFilePath.Replace("\\", "/");
-                        Debug.Log($"Found file on Desktop: {fullPath}");
-                    }
-                    else
-                    {
-                        // Try relative to executable directory (build location)
-                        string executablePath = Path.GetDirectoryName(Application.dataPath);
-                        string executableFilePath = Path.Combine(executablePath, filePath);
-                        Debug.Log($"Trying executable directory path: {executableFilePath}");
-
-                        if (File.Exists(executableFilePath))
-                        {
-                            fullPath = "file://" + executableFilePath.Replace("\\", "/");
-                            Debug.Log($"Found file near executable: {fullPath}");
-                        }
-                        else
-                        {
-                            Debug.LogError($"Audio file not found at any location. Tried:\n" +
-                                         $"1. StreamingAssets: {streamingPath}\n" +
-                                         $"2. Desktop: {desktopFilePath}\n" +
-                                         $"3. Executable dir: {executableFilePath}");
-                            yield break;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // Absolute path
-                if (File.Exists(filePath))
-                {
-                    fullPath = "file://" + filePath.Replace("\\", "/");
-                    Debug.Log($"Using absolute path: {fullPath}");
-                }
-                else
-                {
-                    Debug.LogError($"Audio file not found at absolute path: {filePath}");
-                    yield break;
-                }
-            }
-        }
-
-        // Determine audio type based on file extension
-        AudioType audioType = GetAudioType(fullPath);
-
-        using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(fullPath, audioType))
-        {
-            yield return www.SendWebRequest();
-
-            if (www.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogError($"Failed to load audio clip: {www.error}");
-            }
-            else
-            {
-                AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
-                if (clip != null)
-                {
-                    // Cache the clip
-                    audioClipCache[filePath] = clip;
-                    audioSource.clip = clip;
+                    audioSource.volume = defaultVolume;
+                    audioSource.clip = audioClipCache[filePath];
                     audioSource.loop = isLooping;
                     audioSource.Play();
                 }
+                yield break;
+            }
+
+            string fullPath = filePath;
+
+            // If path doesn't start with file://, http://, or https://, assume it's a local file
+            if (!filePath.StartsWith("file://") && !filePath.StartsWith("http://") && !filePath.StartsWith("https://"))
+            {
+                // Check if it's an absolute path
+                if (!Path.IsPathRooted(filePath))
+                {
+                    // If relative path, try StreamingAssets first
+                    string streamingPath = Path.Combine(Application.streamingAssetsPath, filePath);
+                    Debug.Log($"Trying StreamingAssets path: {streamingPath}");
+
+                    if (File.Exists(streamingPath))
+                    {
+                        fullPath = "file://" + streamingPath.Replace("\\", "/");
+                        Debug.Log($"Found file in StreamingAssets: {fullPath}");
+                    }
+                    else
+                    {
+                        // Try relative to Desktop (for desktop-based files)
+                        string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
+                        string desktopFilePath = Path.Combine(desktopPath, filePath);
+                        Debug.Log($"Trying Desktop path: {desktopFilePath}");
+
+                        if (File.Exists(desktopFilePath))
+                        {
+                            fullPath = "file://" + desktopFilePath.Replace("\\", "/");
+                            Debug.Log($"Found file on Desktop: {fullPath}");
+                        }
+                        else
+                        {
+                            // Try relative to executable directory (build location)
+                            string executablePath = Path.GetDirectoryName(Application.dataPath);
+                            string executableFilePath = Path.Combine(executablePath, filePath);
+                            Debug.Log($"Trying executable directory path: {executableFilePath}");
+
+                            if (File.Exists(executableFilePath))
+                            {
+                                fullPath = "file://" + executableFilePath.Replace("\\", "/");
+                                Debug.Log($"Found file near executable: {fullPath}");
+                            }
+                            else
+                            {
+                                Debug.LogError($"Audio file not found at any location. Tried:\n" +
+                                             $"1. StreamingAssets: {streamingPath}\n" +
+                                             $"2. Desktop: {desktopFilePath}\n" +
+                                             $"3. Executable dir: {executableFilePath}");
+                                yield break;
+                            }
+                        }
+                    }
+                }
                 else
                 {
-                    Debug.LogWarning($"Failed to create AudioClip from file: {fullPath}");
+                    // Absolute path
+                    if (File.Exists(filePath))
+                    {
+                        fullPath = "file://" + filePath.Replace("\\", "/");
+                        Debug.Log($"Using absolute path: {fullPath}");
+                    }
+                    else
+                    {
+                        Debug.LogError($"Audio file not found at absolute path: {filePath}");
+                        yield break;
+                    }
                 }
+            }
+
+            // Determine audio type based on file extension
+            AudioType audioType = GetAudioType(fullPath);
+
+            using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(fullPath, audioType))
+            {
+                yield return www.SendWebRequest();
+
+                if (www.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogError($"Failed to load audio clip: {www.error}");
+                }
+                else
+                {
+                    AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
+                    if (clip != null)
+                    {
+                        // Calculate clip size in MB
+                        float clipSizeMB = (clip.samples * clip.channels * 4f) / (1024f * 1024f); // 4 bytes per sample (32-bit float)
+                        
+                        // Check if we need to make room in cache
+                        while ((audioClipCache.Count >= maxCacheSize || currentCacheSizeMB + clipSizeMB > maxCacheSizeMB) 
+                               && audioClipCache.Count > 0)
+                        {
+                            RemoveOldestCacheEntry();
+                        }
+                        
+                        // Cache the clip
+                        audioClipCache[filePath] = clip;
+                        cacheAccessTimes[filePath] = Time.time;
+                        currentCacheSizeMB += clipSizeMB;
+                        
+                        if (audioSource != null)
+                        {
+                            audioSource.clip = clip;
+                            audioSource.loop = isLooping;
+                            audioSource.Play();
+                        }
+                        
+                        Debug.Log($"Cached audio clip: {filePath} (Size: {clipSizeMB:F2}MB, Total cache: {currentCacheSizeMB:F2}MB)");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Failed to create AudioClip from file: {fullPath}");
+                    }
+                }
+            }
+        }
+        finally
+        {
+            // Remove from active loading coroutines
+            if (activeLoadingCoroutines.ContainsKey(filePath))
+            {
+                activeLoadingCoroutines.Remove(filePath);
             }
         }
     }
@@ -814,16 +869,28 @@ public class SoundEffectManager : MonoBehaviour
 
         foreach (var sound in soundDataCollection.soundDataList[styleIndex].soundList)
         {
-            if (!audioClipCache.ContainsKey(sound.clipPath))
+            if (!audioClipCache.ContainsKey(sound.clipPath) && !activeLoadingCoroutines.ContainsKey(sound.clipPath))
             {
-                StartCoroutine(PreloadAudio(sound.clipPath));
+                Coroutine preloadCoroutine = StartCoroutine(PreloadAudio(sound.clipPath));
+                activeLoadingCoroutines[sound.clipPath] = preloadCoroutine;
             }
         }
     }
 
     private IEnumerator PreloadAudio(string filePath)
     {
-        yield return StartCoroutine(LoadAudioClip(filePath));
+        try
+        {
+            yield return StartCoroutine(LoadAudioClip(filePath));
+        }
+        finally
+        {
+            // Remove from active loading coroutines
+            if (activeLoadingCoroutines.ContainsKey(filePath))
+            {
+                activeLoadingCoroutines.Remove(filePath);
+            }
+        }
     }
 
     private IEnumerator LoadAudioClip(string filePath)
@@ -900,7 +967,19 @@ public class SoundEffectManager : MonoBehaviour
                 AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
                 if (clip != null)
                 {
+                    // Calculate clip size and manage cache
+                    float clipSizeMB = (clip.samples * clip.channels * 4f) / (1024f * 1024f);
+                    
+                    // Check if we need to make room in cache
+                    while ((audioClipCache.Count >= maxCacheSize || currentCacheSizeMB + clipSizeMB > maxCacheSizeMB) 
+                           && audioClipCache.Count > 0)
+                    {
+                        RemoveOldestCacheEntry();
+                    }
+                    
                     audioClipCache[filePath] = clip;
+                    cacheAccessTimes[filePath] = Time.time;
+                    currentCacheSizeMB += clipSizeMB;
                 }
             }
         }
@@ -917,6 +996,92 @@ public class SoundEffectManager : MonoBehaviour
             }
         }
         audioClipCache.Clear();
+        cacheAccessTimes.Clear();
+        currentCacheSizeMB = 0f;
+        
+        // Also clear active loading coroutines
+        foreach (var coroutine in activeLoadingCoroutines.Values)
+        {
+            if (coroutine != null)
+            {
+                StopCoroutine(coroutine);
+            }
+        }
+        activeLoadingCoroutines.Clear();
+        
+        Debug.Log("Audio cache and loading coroutines cleared");
+    }
+    
+    // Remove oldest cache entry based on LRU
+    private void RemoveOldestCacheEntry()
+    {
+        if (audioClipCache.Count == 0) return;
+        
+        string oldestKey = null;
+        float oldestTime = float.MaxValue;
+        
+        foreach (var kvp in cacheAccessTimes)
+        {
+            if (kvp.Value < oldestTime)
+            {
+                oldestTime = kvp.Value;
+                oldestKey = kvp.Key;
+            }
+        }
+        
+        if (oldestKey != null && audioClipCache.ContainsKey(oldestKey))
+        {
+            AudioClip clipToRemove = audioClipCache[oldestKey];
+            if (clipToRemove != null)
+            {
+                float clipSizeMB = (clipToRemove.samples * clipToRemove.channels * 4f) / (1024f * 1024f);
+                currentCacheSizeMB -= clipSizeMB;
+                DestroyImmediate(clipToRemove);
+                Debug.Log($"Removed cached audio clip: {oldestKey} (Freed: {clipSizeMB:F2}MB)");
+            }
+            
+            audioClipCache.Remove(oldestKey);
+            cacheAccessTimes.Remove(oldestKey);
+        }
+    }
+    
+    // Get current cache statistics
+    public string GetCacheStats()
+    {
+        return $"Cache: {audioClipCache.Count}/{maxCacheSize} clips, {currentCacheSizeMB:F2}/{maxCacheSizeMB:F2}MB";
+    }
+    
+    // Method to force cleanup of unused clips (call periodically)
+    public void CleanupUnusedClips(float maxAge = 300f) // 5 minutes default
+    {
+        float currentTime = Time.time;
+        var keysToRemove = new List<string>();
+        
+        foreach (var kvp in cacheAccessTimes)
+        {
+            if (currentTime - kvp.Value > maxAge)
+            {
+                keysToRemove.Add(kvp.Key);
+            }
+        }
+        
+        foreach (string key in keysToRemove)
+        {
+            if (audioClipCache.ContainsKey(key))
+            {
+                AudioClip clipToRemove = audioClipCache[key];
+                if (clipToRemove != null)
+                {
+                    float clipSizeMB = (clipToRemove.samples * clipToRemove.channels * 4f) / (1024f * 1024f);
+                    currentCacheSizeMB -= clipSizeMB;
+                    DestroyImmediate(clipToRemove);
+                    Debug.Log($"Cleaned up unused audio clip: {key} (Freed: {clipSizeMB:F2}MB)");
+                }
+                
+                audioClipCache.Remove(key);
+                cacheAccessTimes.Remove(key);
+            }
+        }
     }
 
     /// <summary>
@@ -978,6 +1143,8 @@ public class SoundEffectManager : MonoBehaviour
             SetWindowAlwaysOnTop(false);
         }
 
+        // Stop all active coroutines and clear cache
+        StopAllCoroutines();
         ClearAudioCache();
         Instance = null;
     }
@@ -995,6 +1162,19 @@ public class SoundEffectManager : MonoBehaviour
         {
             StopAllSounds();
         }
+        
+        // Memory management - cleanup old clips every 30 seconds
+        if (Time.time % 30f < Time.deltaTime)
+        {
+            CleanupUnusedClips();
+        }
+        
+        // Debug key for cache stats
+        if (Input.GetKeyDown(KeyCode.M))
+        {
+            Debug.Log($"Memory Stats: {GetCacheStats()}");
+        }
+        
         // Check and apply always on top behavior
         CheckAndApplyAlwaysOnTop();
     }

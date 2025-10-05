@@ -3,59 +3,132 @@ using UnityEngine.UI;
 
 public class AudioLoadingExample : MonoBehaviour
 {
+    [Header("Audio Settings")]
     public AudioSource audioSource;
     public string soundName;
     public string clipPath;
+    
+    [Header("UI Elements")]
     public Sprite favoriteIcon;
     public Sprite defaultIcon;
     public Image iconImage;
+    
+    // Cache reference to avoid repeated null checks
+    private SoundEffectManager soundManager;
+    private bool isFavorite;
 
     void Start()
     {
-        // if (SoundEffectManager.Instance != null)
-        // {
-        //     SoundEffectManager.Instance.PreloadAudioClips();
-        // }
+        // Cache the manager reference for better performance
+        soundManager = SoundEffectManager.Instance;
+        
+        // Load favorite state from PlayerPrefs
+        isFavorite = PlayerPrefs.GetInt("FavoriteSoundName" + soundName + clipPath, 0) == 1;
+        UpdateFavoriteIcon();
+    }
+    
+    private void UpdateFavoriteIcon()
+    {
+        if (iconImage != null)
+        {
+            iconImage.sprite = isFavorite ? favoriteIcon : defaultIcon;
+        }
     }
     
     public void PlaySound()
     {
-        if (SoundEffectManager.Instance != null && audioSource != null)
+        if (soundManager != null && audioSource != null)
         {
+            // Stop current audio to prevent memory buildup from overlapping sounds
+
             audioSource.Stop();
-            SoundEffectManager.Instance.PlaySound(soundName, audioSource);
+            soundManager.PlaySound(soundName, audioSource);
         }
     }
+    
+    public void ToggleFavoriteSound()
+    {
+        if (soundManager != null)
+        {
+            if (isFavorite)
+            {
+                RemoveFavoriteSound();
+            }
+            else
+            {
+                AddFavoriteSound();
+            }
+        }
+    }
+    
     public void AddFavoriteSound()
     {
-        if (SoundEffectManager.Instance != null)
+        if (soundManager != null && !isFavorite)
         {
-            iconImage.sprite = favoriteIcon;
-            SoundEffectManager.Instance.AddSoundToFavorites(soundName, clipPath);
+            isFavorite = true;
+            UpdateFavoriteIcon();
+            soundManager.AddSoundToFavorites(soundName, clipPath);
             PlayerPrefs.SetInt("FavoriteSoundName" + soundName + clipPath, 1);
+            PlayerPrefs.Save(); // Ensure data is saved
         }
     }
+    
     public void RemoveFavoriteSound()
     {
-        if (SoundEffectManager.Instance != null)
+        if (soundManager != null && isFavorite)
         {
-            Destroy(gameObject);
-            iconImage.sprite = defaultIcon;
-            SoundEffectManager.Instance.RemoveFavoriteSound(soundName, clipPath);
+            isFavorite = false;
+            UpdateFavoriteIcon();
+            soundManager.RemoveFavoriteSound(soundName, clipPath);
             PlayerPrefs.SetInt("FavoriteSoundName" + soundName + clipPath, 0);
+            PlayerPrefs.Save(); // Ensure data is saved
+            
+            // Only destroy if this is in the favorites tab
+            if (soundManager.selectedAudioStyle == AudioStyle.Favorite)
+            {
+                Destroy(gameObject);
+            }
         }
     }
+    
     void Update()
     {
-        audioSource.volume = SoundEffectManager.Instance.defaultVolume;
+        // Cache null check to avoid repeated lookups
+        if (soundManager == null)
+        {
+            soundManager = SoundEffectManager.Instance;
+        }
+        
+        // Update volume only if manager exists and volume has changed
+        if (soundManager != null && audioSource != null)
+        {
+            if (Mathf.Abs(audioSource.volume - soundManager.defaultVolume) > 0.001f)
+            {
+                audioSource.volume = soundManager.defaultVolume;
+            }
+        }
+        
+        // Debug keys (only check in debug builds to reduce overhead)
+        #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (Input.GetKeyDown(KeyCode.P))
         {
-            SoundEffectManager.Instance.PreloadAudioClips();
+            soundManager?.PreloadAudioClips();
         }
 
         if (Input.GetKeyDown(KeyCode.C))
         {
-            SoundEffectManager.Instance.ClearAudioCache();
+            soundManager?.ClearAudioCache();
+        }
+        #endif
+    }
+    
+    void OnDestroy()
+    {
+        // Stop audio source to free up resources
+        if (audioSource != null && audioSource.isPlaying)
+        {
+            audioSource.Stop();
+            audioSource.clip = null;
         }
     }
 }

@@ -7,12 +7,12 @@ public class AudioLoadingExample : MonoBehaviour
     public AudioSource audioSource;
     public string soundName;
     public string clipPath;
-    
+
     [Header("UI Elements")]
     public Sprite favoriteIcon;
     public Sprite defaultIcon;
     public Image iconImage;
-    
+
     // Cache reference to avoid repeated null checks
     private SoundEffectManager soundManager;
     private bool isFavorite;
@@ -21,12 +21,12 @@ public class AudioLoadingExample : MonoBehaviour
     {
         // Cache the manager reference for better performance
         soundManager = SoundEffectManager.Instance;
-        
+
         // Load favorite state from PlayerPrefs
         isFavorite = PlayerPrefs.GetInt("FavoriteSoundName" + soundName + clipPath, 0) == 1;
         UpdateFavoriteIcon();
     }
-    
+
     private void UpdateFavoriteIcon()
     {
         if (iconImage != null)
@@ -34,7 +34,7 @@ public class AudioLoadingExample : MonoBehaviour
             iconImage.sprite = isFavorite ? favoriteIcon : defaultIcon;
         }
     }
-    
+
     public void PlaySound()
     {
         if (soundManager != null && audioSource != null)
@@ -45,7 +45,7 @@ public class AudioLoadingExample : MonoBehaviour
             soundManager.PlaySound(soundName, audioSource);
         }
     }
-    
+
     public void ToggleFavoriteSound()
     {
         if (soundManager != null)
@@ -60,7 +60,7 @@ public class AudioLoadingExample : MonoBehaviour
             }
         }
     }
-    
+
     public void AddFavoriteSound()
     {
         if (soundManager != null && !isFavorite)
@@ -72,7 +72,7 @@ public class AudioLoadingExample : MonoBehaviour
             PlayerPrefs.Save(); // Ensure data is saved
         }
     }
-    
+
     public void RemoveFavoriteSound()
     {
         if (soundManager != null && isFavorite)
@@ -82,7 +82,7 @@ public class AudioLoadingExample : MonoBehaviour
             soundManager.RemoveFavoriteSound(soundName, clipPath);
             PlayerPrefs.SetInt("FavoriteSoundName" + soundName + clipPath, 0);
             PlayerPrefs.Save(); // Ensure data is saved
-            
+
             // Only destroy if this is in the favorites tab
             if (soundManager.selectedAudioStyle == AudioStyle.Favorite)
             {
@@ -90,7 +90,7 @@ public class AudioLoadingExample : MonoBehaviour
             }
         }
     }
-    
+
     void Update()
     {
         // Cache null check to avoid repeated lookups
@@ -98,18 +98,22 @@ public class AudioLoadingExample : MonoBehaviour
         {
             soundManager = SoundEffectManager.Instance;
         }
-        
+
         // Update volume only if manager exists and volume has changed
         if (soundManager != null && audioSource != null)
         {
+            soundManager.isLooping = soundManager.loopToggle.isOn;
             if (Mathf.Abs(audioSource.volume - soundManager.defaultVolume) > 0.001f)
             {
                 audioSource.volume = soundManager.defaultVolume;
             }
+            if (Mathf.Abs(audioSource.pitch - soundManager.defaultSpeed) > 0.001f)
+            {
+                audioSource.pitch = soundManager.defaultSpeed;
+            }
         }
-        
         // Debug keys (only check in debug builds to reduce overhead)
-        #if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (Input.GetKeyDown(KeyCode.P))
         {
             soundManager?.PreloadAudioClips();
@@ -119,9 +123,9 @@ public class AudioLoadingExample : MonoBehaviour
         {
             soundManager?.ClearAudioCache();
         }
-        #endif
+#endif
     }
-    
+
     void OnDestroy()
     {
         // Stop audio source to free up resources

@@ -205,6 +205,11 @@ public class SoundEffectManager : MonoBehaviour
     [Header("Volume Settings")]
     public float defaultVolume = 1.0f;
     public Slider volumeSlider;
+    [Header("Speed Settings")]
+    public float defaultSpeed = 1.0f;
+    public float maxSpeed = 3.0f;
+    public float minSpeed = 0.1f;
+    public Slider speedSlider;
     [Header("Sound Data")]
     private SoundDataCollection soundDataCollection;
     private readonly string soundDataFileName = "soundData.json";
@@ -420,9 +425,9 @@ public class SoundEffectManager : MonoBehaviour
                         if (content.childCount >= 30)
                             content.offsetMax = new Vector2(0, 205 * (content.childCount / 5));
                         content.anchoredPosition = Vector2.zero;
-                     });
+                    });
 
-                    
+
                     //}
 
                 }
@@ -528,14 +533,14 @@ public class SoundEffectManager : MonoBehaviour
     }
     // Cache for loaded audio clips to avoid reloading
     private Dictionary<string, AudioClip> audioClipCache = new Dictionary<string, AudioClip>();
-    
+
     // Memory management for cache
     [Header("Memory Management")]
     public int maxCacheSize = 20; // Maximum number of clips to cache
     public float maxCacheSizeMB = 50f; // Maximum cache size in MB
     private Dictionary<string, float> cacheAccessTimes = new Dictionary<string, float>();
     private float currentCacheSizeMB = 0f;
-    
+
     // Track active coroutines to prevent duplicates
     private Dictionary<string, Coroutine> activeLoadingCoroutines = new Dictionary<string, Coroutine>();
 
@@ -616,15 +621,15 @@ public class SoundEffectManager : MonoBehaviour
         if (sound != null)
         {
             Debug.Log($"Attempting to play sound: {soundName} with path: {sound.clipPath}");
-            
+
             // Check if already loading this file
             if (activeLoadingCoroutines.ContainsKey(sound.clipPath))
             {
                 ClearAudioCache();
                 Debug.Log($"Audio file {sound.clipPath} is already being loaded, skipping duplicate request");
-                return;
+                //return;
             }
-            
+
             Coroutine loadCoroutine = StartCoroutine(LoadAndPlayAudio(sound.clipPath, audioSource));
             activeLoadingCoroutines[sound.clipPath] = loadCoroutine;
         }
@@ -651,6 +656,7 @@ public class SoundEffectManager : MonoBehaviour
             if (audioClipCache.ContainsKey(sound.clipPath))
             {
                 audioSource.volume = defaultVolume;
+                audioSource.pitch = defaultSpeed;
                 audioSource.clip = audioClipCache[sound.clipPath];
                 audioSource.loop = isLooping;
                 audioSource.Play();
@@ -683,10 +689,11 @@ public class SoundEffectManager : MonoBehaviour
             {
                 // Update access time for LRU
                 cacheAccessTimes[filePath] = Time.time;
-                
+
                 if (audioSource != null)
                 {
                     audioSource.volume = defaultVolume;
+                    audioSource.pitch = defaultSpeed;
                     audioSource.clip = audioClipCache[filePath];
                     audioSource.loop = isLooping;
                     audioSource.Play();
@@ -780,26 +787,26 @@ public class SoundEffectManager : MonoBehaviour
                     {
                         // Calculate clip size in MB
                         float clipSizeMB = (clip.samples * clip.channels * 4f) / (1024f * 1024f); // 4 bytes per sample (32-bit float)
-                        
+
                         // Check if we need to make room in cache
-                        while ((audioClipCache.Count >= maxCacheSize || currentCacheSizeMB + clipSizeMB > maxCacheSizeMB) 
+                        while ((audioClipCache.Count >= maxCacheSize || currentCacheSizeMB + clipSizeMB > maxCacheSizeMB)
                                && audioClipCache.Count > 0)
                         {
                             RemoveOldestCacheEntry();
                         }
-                        
+
                         // Cache the clip
                         audioClipCache[filePath] = clip;
                         cacheAccessTimes[filePath] = Time.time;
                         currentCacheSizeMB += clipSizeMB;
-                        
+
                         if (audioSource != null)
                         {
                             audioSource.clip = clip;
                             audioSource.loop = isLooping;
                             audioSource.Play();
                         }
-                        
+
                         Debug.Log($"Cached audio clip: {filePath} (Size: {clipSizeMB:F2}MB, Total cache: {currentCacheSizeMB:F2}MB)");
                     }
                     else
@@ -969,14 +976,14 @@ public class SoundEffectManager : MonoBehaviour
                 {
                     // Calculate clip size and manage cache
                     float clipSizeMB = (clip.samples * clip.channels * 4f) / (1024f * 1024f);
-                    
+
                     // Check if we need to make room in cache
-                    while ((audioClipCache.Count >= maxCacheSize || currentCacheSizeMB + clipSizeMB > maxCacheSizeMB) 
+                    while ((audioClipCache.Count >= maxCacheSize || currentCacheSizeMB + clipSizeMB > maxCacheSizeMB)
                            && audioClipCache.Count > 0)
                     {
                         RemoveOldestCacheEntry();
                     }
-                    
+
                     audioClipCache[filePath] = clip;
                     cacheAccessTimes[filePath] = Time.time;
                     currentCacheSizeMB += clipSizeMB;
@@ -998,7 +1005,7 @@ public class SoundEffectManager : MonoBehaviour
         audioClipCache.Clear();
         cacheAccessTimes.Clear();
         currentCacheSizeMB = 0f;
-        
+
         // Also clear active loading coroutines
         foreach (var coroutine in activeLoadingCoroutines.Values)
         {
@@ -1008,18 +1015,18 @@ public class SoundEffectManager : MonoBehaviour
             }
         }
         activeLoadingCoroutines.Clear();
-        
+
         Debug.Log("Audio cache and loading coroutines cleared");
     }
-    
+
     // Remove oldest cache entry based on LRU
     private void RemoveOldestCacheEntry()
     {
         if (audioClipCache.Count == 0) return;
-        
+
         string oldestKey = null;
         float oldestTime = float.MaxValue;
-        
+
         foreach (var kvp in cacheAccessTimes)
         {
             if (kvp.Value < oldestTime)
@@ -1028,7 +1035,7 @@ public class SoundEffectManager : MonoBehaviour
                 oldestKey = kvp.Key;
             }
         }
-        
+
         if (oldestKey != null && audioClipCache.ContainsKey(oldestKey))
         {
             AudioClip clipToRemove = audioClipCache[oldestKey];
@@ -1039,24 +1046,24 @@ public class SoundEffectManager : MonoBehaviour
                 DestroyImmediate(clipToRemove);
                 Debug.Log($"Removed cached audio clip: {oldestKey} (Freed: {clipSizeMB:F2}MB)");
             }
-            
+
             audioClipCache.Remove(oldestKey);
             cacheAccessTimes.Remove(oldestKey);
         }
     }
-    
+
     // Get current cache statistics
     public string GetCacheStats()
     {
         return $"Cache: {audioClipCache.Count}/{maxCacheSize} clips, {currentCacheSizeMB:F2}/{maxCacheSizeMB:F2}MB";
     }
-    
+
     // Method to force cleanup of unused clips (call periodically)
     public void CleanupUnusedClips(float maxAge = 300f) // 5 minutes default
     {
         float currentTime = Time.time;
         var keysToRemove = new List<string>();
-        
+
         foreach (var kvp in cacheAccessTimes)
         {
             if (currentTime - kvp.Value > maxAge)
@@ -1064,7 +1071,7 @@ public class SoundEffectManager : MonoBehaviour
                 keysToRemove.Add(kvp.Key);
             }
         }
-        
+
         foreach (string key in keysToRemove)
         {
             if (audioClipCache.ContainsKey(key))
@@ -1077,7 +1084,7 @@ public class SoundEffectManager : MonoBehaviour
                     DestroyImmediate(clipToRemove);
                     Debug.Log($"Cleaned up unused audio clip: {key} (Freed: {clipSizeMB:F2}MB)");
                 }
-                
+
                 audioClipCache.Remove(key);
                 cacheAccessTimes.Remove(key);
             }
@@ -1156,25 +1163,30 @@ public class SoundEffectManager : MonoBehaviour
         {
             defaultVolume = volumeSlider.value;
         }
+        if (speedSlider != null)
+        {
+            defaultSpeed = speedSlider.value;
+            if (defaultSpeed < 0.5f) defaultSpeed = 0.5f; // Prevent zero or negative speed
+        }
         alwaysOnTop = alwaysOnTopToggle.isOn;
         isLooping = loopToggle.isOn;
         if (Input.GetKeyDown(KeyCode.Alpha0))
         {
             StopAllSounds();
         }
-        
+
         // Memory management - cleanup old clips every 30 seconds
         if (Time.time % 30f < Time.deltaTime)
         {
             CleanupUnusedClips();
         }
-        
+
         // Debug key for cache stats
         if (Input.GetKeyDown(KeyCode.M))
         {
             Debug.Log($"Memory Stats: {GetCacheStats()}");
         }
-        
+
         // Check and apply always on top behavior
         CheckAndApplyAlwaysOnTop();
     }

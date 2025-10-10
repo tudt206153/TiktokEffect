@@ -12,6 +12,8 @@ public class AudioLoadingExample : MonoBehaviour
     public Sprite favoriteIcon;
     public Sprite defaultIcon;
     public Image iconImage;
+    public AudioStyle audioStyle;
+    public GameObject deleteButton;
 
     // Cache reference to avoid repeated null checks
     private SoundEffectManager soundManager;
@@ -52,7 +54,11 @@ public class AudioLoadingExample : MonoBehaviour
         {
             if (isFavorite)
             {
-                RemoveFavoriteSound();
+                isFavorite = false;
+            UpdateFavoriteIcon();
+            soundManager.RemoveFavoriteSound(soundName, clipPath);
+            PlayerPrefs.SetInt("FavoriteSoundName" + soundName + clipPath, 0);
+            PlayerPrefs.Save(); // Ensure data is saved
             }
             else
             {
@@ -87,10 +93,29 @@ public class AudioLoadingExample : MonoBehaviour
             if (soundManager.selectedAudioStyle == AudioStyle.Favorite)
             {
                 Destroy(gameObject);
+                
             }
         }
     }
-
+    public void RemoveCurrentSound()
+    {
+        if (soundManager != null)
+        {
+            soundManager.RemoveSound(audioStyle, soundName);
+            Destroy(gameObject);
+            if (isFavorite)
+            {
+                isFavorite = false;
+                soundManager.RemoveSound(AudioStyle.Favorite, soundName);
+                GameObject favor = GameObject.Find(soundName);
+                PlayerPrefs.SetInt("FavoriteSoundName" + soundName + clipPath, 0);
+                if (favor != null)
+                {
+                    Destroy(favor);
+                }
+            }
+        }
+    }
     void Update()
     {
         // Cache null check to avoid repeated lookups
@@ -110,6 +135,10 @@ public class AudioLoadingExample : MonoBehaviour
             if (Mathf.Abs(audioSource.pitch - soundManager.defaultSpeed) > 0.001f)
             {
                 audioSource.pitch = soundManager.defaultSpeed;
+            }
+            if (deleteButton != null && audioStyle != AudioStyle.Favorite)
+            {
+                deleteButton.SetActive(soundManager.deleteToggle.isOn);
             }
         }
         // Debug keys (only check in debug builds to reduce overhead)

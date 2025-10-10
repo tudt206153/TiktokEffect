@@ -17,31 +17,16 @@ public class SoundVariable
 }
 
 [System.Serializable]
-public class SoundDataCollection
-{
-    public List<SoundDataWrapper> soundDataList = new List<SoundDataWrapper>();
-
-    public SoundDataCollection()
-    {
-        // Initialize with 8 empty sound data wrappers for each AudioStyle
-        for (int i = 0; i < 8; i++)
-        {
-            soundDataList.Add(new SoundDataWrapper());
-        }
-    }
-}
-
-[System.Serializable]
-public class SoundDataWrapper
+public class AudioStyleData
 {
     public List<SoundVariable> soundList = new List<SoundVariable>();
 }
 public enum AudioStyle
 {
 
-    Other,
-    Laugh,
-    Kiss,
+    Other1,
+    LaughAndKiss,
+    Other2,
     Song_1,
     Song_2,
     PK1,
@@ -68,6 +53,8 @@ public class SoundEffectManager : MonoBehaviour
 
     private bool wasAlwaysOnTop = false;
     public Toggle loopToggle;
+    public Toggle deleteToggle;
+    public bool deleteToggleState = false;
     public bool isLooping;
     public Sprite favoriteIcon;
     public Sprite defaultIcon;
@@ -77,12 +64,12 @@ public class SoundEffectManager : MonoBehaviour
         Instance = this;
         wasAlwaysOnTop = alwaysOnTop;
         loopToggle.isOn = isLooping;
-        LoadSoundDataFromJson();
-
+        deleteToggle.isOn = deleteToggleState;
+        LoadAllSoundData();
     }
 
     #region JSON_SAVE_LOAD
-    private string GetSoundDataFilePath()
+    private string GetSoundDataDirectory()
     {
         string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
         string fullPath = Path.Combine(desktopPath, jsonPath);
@@ -93,66 +80,114 @@ public class SoundEffectManager : MonoBehaviour
             Directory.CreateDirectory(fullPath);
         }
 
-        return Path.Combine(fullPath, soundDataFileName);
+        return fullPath;
     }
 
-    private void SaveSoundDataToJson()
+    private string GetSoundDataFilePath(AudioStyle audioStyle)
+    {
+        return Path.Combine(GetSoundDataDirectory(), $"{audioStyle}.json");
+    }
+
+    private void SaveSoundDataToJson(AudioStyle audioStyle)
     {
         try
         {
-            string jsonString = JsonUtility.ToJson(soundDataCollection, true);
-            File.WriteAllText(GetSoundDataFilePath(), jsonString);
-            Debug.Log($"Sound data saved to: {GetSoundDataFilePath()}");
+            if (!soundDataDictionary.ContainsKey(audioStyle))
+            {
+                soundDataDictionary[audioStyle] = new AudioStyleData();
+            }
+
+            string jsonString = JsonUtility.ToJson(soundDataDictionary[audioStyle], true);
+            string filePath = GetSoundDataFilePath(audioStyle);
+            File.WriteAllText(filePath, jsonString);
+            Debug.Log($"Sound data for {audioStyle} saved to: {filePath}");
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"Failed to save sound data: {ex.Message}");
+            Debug.LogError($"Failed to save sound data for {audioStyle}: {ex.Message}");
         }
     }
 
-    private void LoadSoundDataFromJson()
+    private void LoadSoundDataFromJson(AudioStyle audioStyle)
     {
-        string filePath = GetSoundDataFilePath();
+        string filePath = GetSoundDataFilePath(audioStyle);
 
         if (File.Exists(filePath))
         {
             try
             {
                 string jsonString = File.ReadAllText(filePath);
-                soundDataCollection = JsonUtility.FromJson<SoundDataCollection>(jsonString);
-                Debug.Log("Sound data loaded from JSON file");
+                AudioStyleData audioStyleData = JsonUtility.FromJson<AudioStyleData>(jsonString);
+                soundDataDictionary[audioStyle] = audioStyleData;
+                Debug.Log($"Sound data for {audioStyle} loaded from JSON file");
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"Failed to load sound data: {ex.Message}");
-                CreateDefaultSoundData();
+                Debug.LogError($"Failed to load sound data for {audioStyle}: {ex.Message}");
+                CreateDefaultSoundData(audioStyle);
             }
         }
         else
         {
-            Debug.Log("No existing sound data file found, creating default data");
-            CreateDefaultSoundData();
+            Debug.Log($"No existing sound data file found for {audioStyle}, creating default data");
+            CreateDefaultSoundData(audioStyle);
         }
     }
 
-    private void CreateDefaultSoundData()
+    private void LoadAllSoundData()
     {
-        soundDataCollection = new SoundDataCollection();
-        SaveSoundDataToJson();
+        foreach (AudioStyle audioStyle in System.Enum.GetValues(typeof(AudioStyle)))
+        {
+            LoadSoundDataFromJson(audioStyle);
+        }
     }
 
-    // Public method to manually save sound data
-    public void SaveData()
+    private void CreateDefaultSoundData(AudioStyle audioStyle)
     {
-        SaveSoundDataToJson();
+        soundDataDictionary[audioStyle] = new AudioStyleData();
+        SaveSoundDataToJson(audioStyle);
+    }
+
+    private void CreateAllDefaultSoundData()
+    {
+        foreach (AudioStyle audioStyle in System.Enum.GetValues(typeof(AudioStyle)))
+        {
+            CreateDefaultSoundData(audioStyle);
+        }
+    }
+
+    // Public method to manually save sound data for specific AudioStyle
+    public void SaveData(AudioStyle audioStyle)
+    {
+        SaveSoundDataToJson(audioStyle);
+    }
+
+    // Public method to manually save all sound data
+    public void SaveAllData()
+    {
+        foreach (AudioStyle audioStyle in System.Enum.GetValues(typeof(AudioStyle)))
+        {
+            SaveSoundDataToJson(audioStyle);
+        }
     }
 
     // Method to clear all sound data (useful for reset functionality)
     public void ClearAllSoundData()
     {
-        soundDataCollection = new SoundDataCollection();
-        SaveSoundDataToJson();
+        foreach (AudioStyle audioStyle in System.Enum.GetValues(typeof(AudioStyle)))
+        {
+            soundDataDictionary[audioStyle] = new AudioStyleData();
+            SaveSoundDataToJson(audioStyle);
+        }
         Debug.Log("All sound data cleared");
+    }
+
+    // Method to clear sound data for specific AudioStyle
+    public void ClearSoundData(AudioStyle audioStyle)
+    {
+        soundDataDictionary[audioStyle] = new AudioStyleData();
+        SaveSoundDataToJson(audioStyle);
+        Debug.Log($"Sound data for {audioStyle} cleared");
     }
 
     // Test method to verify path resolution
@@ -178,18 +213,17 @@ public class SoundEffectManager : MonoBehaviour
     // Method to remove a sound from a specific AudioStyle
     public bool RemoveSound(AudioStyle audioStyle, string soundName)
     {
-        int styleIndex = (int)audioStyle;
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(audioStyle))
         {
             Debug.LogError($"SoundData for AudioStyle {audioStyle} is not assigned.");
             return false;
         }
 
-        SoundVariable soundToRemove = soundDataCollection.soundDataList[styleIndex].soundList.Find(s => s.soundName == soundName);
+        SoundVariable soundToRemove = soundDataDictionary[audioStyle].soundList.Find(s => s.soundName == soundName);
         if (soundToRemove != null)
         {
-            soundDataCollection.soundDataList[styleIndex].soundList.Remove(soundToRemove);
-            SaveSoundDataToJson();
+            soundDataDictionary[audioStyle].soundList.Remove(soundToRemove);
+            SaveSoundDataToJson(audioStyle);
             Debug.Log($"Removed sound: {soundName} from {audioStyle} category");
             return true;
         }
@@ -211,8 +245,7 @@ public class SoundEffectManager : MonoBehaviour
     public float minSpeed = 0.1f;
     public Slider speedSlider;
     [Header("Sound Data")]
-    private SoundDataCollection soundDataCollection;
-    private readonly string soundDataFileName = "soundData.json";
+    private Dictionary<AudioStyle, AudioStyleData> soundDataDictionary = new Dictionary<AudioStyle, AudioStyleData>();
     public List<GameObject> tabList = new List<GameObject>();
     #region ADD_NEW_SOUND
     [Header("Add New Sound Here")]
@@ -226,25 +259,28 @@ public class SoundEffectManager : MonoBehaviour
     public void AddNewSound()
     {
         AudioStyle selectedStyle = (AudioStyle)audioStyleDropdown.value;
-        int styleIndex = (int)selectedStyle;
 
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(selectedStyle))
         {
-            Debug.LogError($"SoundData for AudioStyle {selectedStyle} is not assigned.");
-            return;
+            soundDataDictionary[selectedStyle] = new AudioStyleData();
         }
+
         selectedAudioStyle = selectedStyle;
         string newSoundName = soundNameInput.text.Trim();
         string newClipPath = clipPathInput.text.Trim();
-
-        if (string.IsNullOrEmpty(newSoundName) || string.IsNullOrEmpty(newClipPath))
+        
+        if (string.IsNullOrEmpty(newClipPath))
         {
-            Debug.LogWarning("Sound Name and Clip Path cannot be empty.");
+            Debug.LogWarning("Clip Path cannot be empty.");
             return;
         }
-
+        if (string.IsNullOrEmpty(newSoundName))
+        {
+            //set new sound name = clip name
+            newSoundName = Path.GetFileNameWithoutExtension(newClipPath);
+        }
         // Check for duplicates in the selected style's sound data
-        if (soundDataCollection.soundDataList[styleIndex].soundList.Exists(s => s.soundName == newSoundName))
+        if (soundDataDictionary[selectedStyle].soundList.Exists(s => s.soundName == newSoundName))
         {
             Debug.LogWarning($"A sound with the name '{newSoundName}' already exists in {selectedStyle} category.");
             return;
@@ -256,16 +292,16 @@ public class SoundEffectManager : MonoBehaviour
             clipPath = newClipPath
         };
 
-        soundDataCollection.soundDataList[styleIndex].soundList.Add(newSound);
+        soundDataDictionary[selectedStyle].soundList.Add(newSound);
         Debug.Log($"Added new sound: {newSoundName} with path: {newClipPath} to style: {selectedStyle}");
 
         // Save to JSON file
-        SaveSoundDataToJson();
+        SaveSoundDataToJson(selectedStyle);
 
         // Clear input fields after adding
         soundNameInput.text = "";
         clipPathInput.text = "";
-        audioStyleDropdown.value = 0; // Reset to first option
+        //audioStyleDropdown.value = 0; // Reset to first option
     }
     public void GetClipPath()
     {
@@ -399,7 +435,13 @@ public class SoundEffectManager : MonoBehaviour
                     }
                     //if (content.childCount <= 0)
                     //{
-                    for (int j = 0; j < soundDataCollection.soundDataList[index].soundList.Count; j++)
+                    AudioStyle currentAudioStyle = (AudioStyle)index;
+                    if (!soundDataDictionary.ContainsKey(currentAudioStyle))
+                    {
+                        soundDataDictionary[currentAudioStyle] = new AudioStyleData();
+                    }
+
+                    for (int j = 0; j < soundDataDictionary[currentAudioStyle].soundList.Count; j++)
                     {
                         GameObject soundButton = Instantiate(playSoundButton.gameObject, content);
                         if (i == 7)
@@ -407,8 +449,8 @@ public class SoundEffectManager : MonoBehaviour
                             soundButton.transform.GetChild(1).gameObject.SetActive(false);
                             soundButton.transform.GetChild(2).gameObject.SetActive(true);
                         }
-                        soundButton.GetComponent<AudioLoadingExample>().soundName = soundDataCollection.soundDataList[index].soundList[j].soundName;
-                        soundButton.GetComponent<AudioLoadingExample>().clipPath = soundDataCollection.soundDataList[index].soundList[j].clipPath;
+                        soundButton.GetComponent<AudioLoadingExample>().soundName = soundDataDictionary[currentAudioStyle].soundList[j].soundName;
+                        soundButton.GetComponent<AudioLoadingExample>().clipPath = soundDataDictionary[currentAudioStyle].soundList[j].clipPath;
                         if (PlayerPrefs.GetInt("FavoriteSoundName" + soundButton.GetComponent<AudioLoadingExample>().soundName + soundButton.GetComponent<AudioLoadingExample>().clipPath, 0) == 1)
                         {
                             soundButton.GetComponent<AudioLoadingExample>().iconImage.sprite = soundButton.GetComponent<AudioLoadingExample>().favoriteIcon;
@@ -417,7 +459,9 @@ public class SoundEffectManager : MonoBehaviour
                         {
                             soundButton.GetComponent<AudioLoadingExample>().iconImage.sprite = soundButton.GetComponent<AudioLoadingExample>().defaultIcon;
                         }
-                        soundButton.GetComponentInChildren<TextMeshProUGUI>().text = soundDataCollection.soundDataList[index].soundList[j].soundName;
+                        soundButton.GetComponent<AudioLoadingExample>().audioStyle = currentAudioStyle;
+                        soundButton.gameObject.name = soundDataDictionary[currentAudioStyle].soundList[j].soundName;
+                        soundButton.GetComponentInChildren<TextMeshProUGUI>().text = soundDataDictionary[currentAudioStyle].soundList[j].soundName;
                     }
                     DOVirtual.DelayedCall(0.1f, () =>
                     {
@@ -459,16 +503,15 @@ public class SoundEffectManager : MonoBehaviour
             addSoundTab.GetComponent<CanvasGroup>().blocksRaycasts = true;
         }
     }
-    public void AddSoundToFavorites(string soundName, string clipPath)
+    public void AddSoundToFavorites(string soundName, string clipPath, AudioStyle audioStyle = AudioStyle.Favorite)
     {
-        AudioStyle selectedStyle = AudioStyle.Favorite;
-        int styleIndex = (int)selectedStyle;
+        AudioStyle selectedStyle = audioStyle;
 
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(selectedStyle))
         {
-            Debug.LogError($"SoundData for AudioStyle {selectedStyle} is not assigned.");
-            return;
+            soundDataDictionary[selectedStyle] = new AudioStyleData();
         }
+
         selectedAudioStyle = selectedStyle;
         string newSoundName = soundName.Trim();
         string newClipPath = clipPath.Trim();
@@ -480,7 +523,7 @@ public class SoundEffectManager : MonoBehaviour
         }
 
         // Check for duplicates in the selected style's sound data
-        if (soundDataCollection.soundDataList[styleIndex].soundList.Exists(s => s.soundName == newSoundName))
+        if (soundDataDictionary[selectedStyle].soundList.Exists(s => s.soundName == newSoundName))
         {
             Debug.LogWarning($"A sound with the name '{newSoundName}' already exists in {selectedStyle} category.");
             return;
@@ -492,20 +535,18 @@ public class SoundEffectManager : MonoBehaviour
             clipPath = newClipPath
         };
 
-        soundDataCollection.soundDataList[styleIndex].soundList.Add(newSound);
+        soundDataDictionary[selectedStyle].soundList.Add(newSound);
         Debug.Log($"Added new sound: {newSoundName} with path: {newClipPath} to style: {selectedStyle}");
         // Save to JSON file
-        SaveSoundDataToJson();
+        SaveSoundDataToJson(selectedStyle);
     }
-    public void RemoveFavoriteSound(string soundName, string clipPath)
+    public void RemoveFavoriteSound(string soundName, string clipPath, AudioStyle audioStyle = AudioStyle.Favorite)
     {
-        AudioStyle selectedStyle = AudioStyle.Favorite;
-        int styleIndex = (int)selectedStyle;
+        AudioStyle selectedStyle = audioStyle;
 
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(selectedStyle))
         {
-            Debug.LogError($"SoundData for AudioStyle {selectedStyle} is not assigned.");
-            return;
+            soundDataDictionary[selectedStyle] = new AudioStyleData();
         }
 
         string newSoundName = soundName.Trim();
@@ -518,13 +559,13 @@ public class SoundEffectManager : MonoBehaviour
         }
 
         // Find and remove the sound from the selected style's sound data
-        SoundVariable soundToRemove = soundDataCollection.soundDataList[styleIndex].soundList.Find(s => s.soundName == newSoundName && s.clipPath == newClipPath);
+        SoundVariable soundToRemove = soundDataDictionary[selectedStyle].soundList.Find(s => s.soundName == newSoundName && s.clipPath == newClipPath);
         if (soundToRemove != null)
         {
-            soundDataCollection.soundDataList[styleIndex].soundList.Remove(soundToRemove);
+            soundDataDictionary[selectedStyle].soundList.Remove(soundToRemove);
             Debug.Log($"Removed sound: {newSoundName} with path: {newClipPath} from style: {selectedStyle}");
             // Save to JSON file
-            SaveSoundDataToJson();
+            SaveSoundDataToJson(selectedStyle);
         }
         else
         {
@@ -547,11 +588,11 @@ public class SoundEffectManager : MonoBehaviour
     // Helper method to find sound by name across all AudioStyles
     private SoundVariable FindSoundByName(string soundName)
     {
-        foreach (var soundData in soundDataCollection.soundDataList)
+        foreach (var kvp in soundDataDictionary)
         {
-            if (soundData != null)
+            if (kvp.Value != null)
             {
-                SoundVariable sound = soundData.soundList.Find(s => s.soundName == soundName);
+                SoundVariable sound = kvp.Value.soundList.Find(s => s.soundName == soundName);
                 if (sound != null)
                 {
                     return sound;
@@ -564,28 +605,26 @@ public class SoundEffectManager : MonoBehaviour
     // Method to get all sounds from a specific AudioStyle
     public List<SoundVariable> GetSoundsByStyle()
     {
-        int styleIndex = (int)selectedAudioStyle;
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(selectedAudioStyle))
         {
             Debug.LogError($"SoundData for AudioStyle {selectedAudioStyle} is not assigned.");
             return new List<SoundVariable>();
         }
 
-        return new List<SoundVariable>(soundDataCollection.soundDataList[styleIndex].soundList);
+        return new List<SoundVariable>(soundDataDictionary[selectedAudioStyle].soundList);
     }
 
     // Method to get sound names from a specific AudioStyle
     public List<string> GetSoundNamesByStyle()
     {
-        int styleIndex = (int)selectedAudioStyle;
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(selectedAudioStyle))
         {
             Debug.LogError($"SoundData for AudioStyle {selectedAudioStyle} is not assigned.");
             return new List<string>();
         }
 
         List<string> soundNames = new List<string>();
-        foreach (var sound in soundDataCollection.soundDataList[styleIndex].soundList)
+        foreach (var sound in soundDataDictionary[selectedAudioStyle].soundList)
         {
             soundNames.Add(sound.soundName);
         }
@@ -610,14 +649,13 @@ public class SoundEffectManager : MonoBehaviour
     // Overloaded method to play sound by AudioStyle and name
     public void PlaySound(string soundName, AudioSource audioSource = null)
     {
-        int styleIndex = (int)selectedAudioStyle;
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(selectedAudioStyle))
         {
             Debug.LogError($"SoundData for AudioStyle {selectedAudioStyle} is not assigned.");
             return;
         }
 
-        SoundVariable sound = soundDataCollection.soundDataList[styleIndex].soundList.Find(s => s.soundName == soundName);
+        SoundVariable sound = soundDataDictionary[selectedAudioStyle].soundList.Find(s => s.soundName == soundName);
         if (sound != null)
         {
             Debug.Log($"Attempting to play sound: {soundName} with path: {sound.clipPath}");
@@ -642,14 +680,13 @@ public class SoundEffectManager : MonoBehaviour
     // Overloaded method to play sound synchronously by AudioStyle and name
     public void PlaySoundSync(string soundName, AudioSource audioSource = null)
     {
-        int styleIndex = (int)selectedAudioStyle;
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(selectedAudioStyle))
         {
             Debug.LogError($"SoundData for AudioStyle {selectedAudioStyle} is not assigned.");
             return;
         }
 
-        SoundVariable sound = soundDataCollection.soundDataList[styleIndex].soundList.Find(s => s.soundName == soundName);
+        SoundVariable sound = soundDataDictionary[selectedAudioStyle].soundList.Find(s => s.soundName == soundName);
         if (sound != null)
         {
             // Check if already cached
@@ -849,11 +886,11 @@ public class SoundEffectManager : MonoBehaviour
     // Method to preload audio clips for better performance
     public void PreloadAudioClips()
     {
-        foreach (var soundData in soundDataCollection.soundDataList)
+        foreach (var kvp in soundDataDictionary)
         {
-            if (soundData != null)
+            if (kvp.Value != null)
             {
-                foreach (var sound in soundData.soundList)
+                foreach (var sound in kvp.Value.soundList)
                 {
                     if (!audioClipCache.ContainsKey(sound.clipPath))
                     {
@@ -867,14 +904,13 @@ public class SoundEffectManager : MonoBehaviour
     // Method to preload audio clips for a specific AudioStyle
     public void PreloadAudioClips(AudioStyle audioStyle)
     {
-        int styleIndex = (int)audioStyle;
-        if (styleIndex >= soundDataCollection.soundDataList.Count || soundDataCollection.soundDataList[styleIndex] == null)
+        if (!soundDataDictionary.ContainsKey(audioStyle))
         {
             Debug.LogError($"SoundData for AudioStyle {audioStyle} is not assigned.");
             return;
         }
 
-        foreach (var sound in soundDataCollection.soundDataList[styleIndex].soundList)
+        foreach (var sound in soundDataDictionary[audioStyle].soundList)
         {
             if (!audioClipCache.ContainsKey(sound.clipPath) && !activeLoadingCoroutines.ContainsKey(sound.clipPath))
             {
@@ -1170,6 +1206,7 @@ public class SoundEffectManager : MonoBehaviour
         }
         alwaysOnTop = alwaysOnTopToggle.isOn;
         isLooping = loopToggle.isOn;
+        deleteToggleState = deleteToggle.isOn;
         if (Input.GetKeyDown(KeyCode.Alpha0))
         {
             StopAllSounds();

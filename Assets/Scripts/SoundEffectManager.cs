@@ -36,6 +36,9 @@ public enum AudioStyle
 public class SoundEffectManager : MonoBehaviour
 {
     public static SoundEffectManager Instance;
+    public Texture2D customCursorTexture;
+    public Vector2 hotspot = Vector2.zero;
+    public CursorMode cursorMode = CursorMode.Auto;
     public string jsonPath = "TiktokEffect/JsonData";
     // Windows API declarations for always on top functionality
     [DllImport("user32.dll")]
@@ -634,6 +637,14 @@ public class SoundEffectManager : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+        if (customCursorTexture != null)
+        {
+            Cursor.SetCursor(customCursorTexture, hotspot, cursorMode);
+        }
+        else
+        {
+            Debug.LogWarning("Cursor texture is not assigned.");
+        }
         PreloadAudioClips();
         SetTab(7);
     }
